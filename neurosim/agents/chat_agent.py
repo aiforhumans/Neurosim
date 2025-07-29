@@ -1,111 +1,79 @@
 """
-Chat agent for NeuroSim.
+Simplified chat agent for NeuroSim.
 
-The chat agent is responsible for orchestrating conversations with the
-underlying large language model. It pulls in relevant context from
-long-term memory, builds a prompt containing past messages and the
-current query, and streams the response back to the caller. After
-generating a reply the agent updates the memory log and the emotional
-state via the emotion agent.
+In the full project the chat agent would send prompts to a language model
+and incorporate retrieved memories and emotional state into its responses.
+This stubbed implementation echoes the user's message and demonstrates
+interaction with the memory and emotion agents.
 """
 
 from __future__ import annotations
 
-from typing import List, Optional
+from typing import Optional
 
 from neurosim.core.config import settings, Settings
 from neurosim.core.state import SessionState
-from neurosim.core.utils import num_tokens_from_string
 from neurosim.core.logging_config import get_agent_logger
-from neurosim.agents.emotion_agent import EmotionAgent
-from neurosim.agents.memory_agent import MemoryAgent
 
-from langchain_openai import ChatOpenAI
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from neurosim.agents.memory_agent import MemoryAgent
+from neurosim.agents.emotion_agent import EmotionAgent
+from neurosim.agents.reasoning_agent import ReasoningAgent
+from neurosim.plugins.plugin_manager import PluginManager
 
 
 class ChatAgent:
-    """High-level conversation orchestrator."""
+    """Generate conversational responses and manage memory/emotion."""
 
-    def __init__(
-        self,
-        config: Optional[Settings] = None,
-        memory_agent: Optional[MemoryAgent] = None,
-        emotion_agent: Optional[EmotionAgent] = None,
-    ) -> None:
+    def __init__(self, config: Optional[Settings] = None,
+                 memory_agent: Optional[MemoryAgent] = None,
+                 emotion_agent: Optional[EmotionAgent] = None) -> None:
         self.settings = config or settings
         self.logger = get_agent_logger("ChatAgent", "CHAT")
-        
-        self.logger.info("Initializing ChatAgent")
-        
-        # Use provided memory/emotion agents or create local ones
+        self.logger.info("Initializing simplified ChatAgent")
         self.memory_agent = memory_agent or MemoryAgent(self.settings)
         self.emotion_agent = emotion_agent or EmotionAgent(self.settings)
-        
-        # Initialise chat model
-        self.logger.debug(f"Initializing LLM: {self.settings.model} at {self.settings.base_url}")
-        self.llm = ChatOpenAI(
-            base_url=self.settings.base_url,
-            api_key=self.settings.api_key,
-            model_name=self.settings.model,
-            temperature=self.settings.temperature,
-        )
+        # Initialise plugin manager for extensibility
+        self.plugin_manager = PluginManager()
 
-    def _build_messages(self, user_message: str, session_state: SessionState) -> List:
-        """Construct the list of chat messages to send to the LLM.
-
-        We include a system message that injects relevant past memory
-        content followed by alternating human/assistant messages drawn
-        from the session history. Finally we append the current user
-        message.
+    def generate_response(self, message: str, session_state: SessionState) -> str:
         """
-        messages: List = []
-        # Inject relevant memories as system context
-        docs = self.memory_agent.search_memory(user_message, top_k=self.settings.max_memory_entries)
-        if docs:
-            memory_context = "\n".join([doc.page_content for doc in docs])
-            system_prompt = (
-                "The following lines are relevant memories from past interactions. "
-                "Use them to inform your answer, but do not mention them explicitly.\n"
-                f"{memory_context}"
-            )
-            messages.append(SystemMessage(content=system_prompt))
-            self.logger.debug(f"Added {len(docs)} memory contexts to prompt")
+        Produce a response for the given user message.
 
-        # Rebuild conversation from history
-        for entry in session_state.conversation_history:
-            role = entry.get("role")
-            content = entry.get("content")
-            if role == "user":
-                messages.append(HumanMessage(content=content))
-            elif role == "assistant":
-                messages.append(AIMessage(content=content))
-        # Append the latest user message
-        messages.append(HumanMessage(content=user_message))
-        return messages
+        This stub implementation simply echoes the user's message with a prefix
+        and updates memory and emotion accordingly.
+        """
+        self.logger.debug(f"Received message: {message}")
 
-    def generate_response(self, user_message: str, session_state: SessionState) -> str:
-        """Generate a reply to a user message and update state accordingly."""
-        # Build messages for the LLM
-        messages = self._build_messages(user_message, session_state)
-        # Invoke the model
-        try:
-            response_message = self.llm.invoke(messages)
-            assistant_reply: str = response_message.content
-        except Exception as e:
-            # Fallback on error
-            assistant_reply = "Sorry, something went wrong while generating a response."
+        # Allow plugins to intercept the message and provide a response. If a
+        # plugin returns a response, it supersedes the default behaviour.
+        plugin_response = self.plugin_manager.run_plugins(message, session_state)
+        if plugin_response is not None:
+            reply = plugin_response
+        else:
+            # Simple reasoning command: if the message begins with '/plan' or 'plan:'
+            msg_lower = message.strip().lower()
+            if msg_lower.startswith("/plan") or msg_lower.startswith("plan:"):
+                # Extract the task description after the command delimiter
+                parts = message.split(maxsplit=1)
+                task = parts[1] if len(parts) > 1 else ""
+                self.logger.debug(f"Delegating reasoning task: {task}")
+                reasoning_agent = ReasoningAgent(self.settings)
+                reply = reasoning_agent.analyse(task)
+            else:
+                reply = f"Echo: {message}"
 
-        # Update conversation history
-        session_state.conversation_history.append({"role": "user", "content": user_message})
-        session_state.conversation_history.append({"role": "assistant", "content": assistant_reply})
+            # Apply mood-based response styling; high mood yields more positive tone,
+            # low mood yields more neutral or subdued tone. This must happen after
+            # computing the core reply so that modifications reflect current state.
+            mood = session_state.emotion.mood
+            if mood > 0.7:
+                reply = f"😊 {reply}"
+            elif mood < 0.3:
+                reply = f"😞 {reply}"
 
-        # Persist to long-term memory
-        self.memory_agent.store_memory(user_message, {"role": "user"})
-        self.memory_agent.store_memory(assistant_reply, {"role": "assistant"})
-
-        # Update emotional state based on the reply
-        session_state.emotion = self.emotion_agent.update_on_message(
-            assistant_reply, session_state.emotion
-        )
-        return assistant_reply
+        # Update memory
+        self.memory_agent.store_memory(message, metadata={"role": "user"})
+        self.memory_agent.store_memory(reply, metadata={"role": "assistant"})
+        # Update emotion
+        self.emotion_agent.update_emotion(session_state, message, reply)
+        return reply

@@ -18,7 +18,7 @@ from __future__ import annotations
 from typing import Optional
 
 from neurosim.core.config import settings, Settings
-from neurosim.core.state import EmotionState, SessionState
+from neurosim.core.state import SessionState
 from neurosim.agents.emotion_agent import EmotionAgent
 from neurosim.agents.memory_agent import MemoryAgent
 from neurosim.agents.chat_agent import ChatAgent
@@ -43,7 +43,8 @@ class AgentManager:
         self.event_agent = EventAgent(self.settings)
 
     def process_message(self, message: str, session_state: SessionState) -> str:
-        """Process a user message and produce an assistant response.
+        """
+        Process a user message and produce an assistant response.
 
         Args:
             message: The raw text entered by the user.

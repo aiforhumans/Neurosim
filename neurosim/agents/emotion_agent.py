@@ -1,12 +1,10 @@
 """
-Emotion agent for NeuroSim.
+Simplified emotion agent for NeuroSim.
 
-This agent tracks and updates the AI's emotional state based on
-incoming messages and other stimuli. A simple sentiment analysis is
-used to adjust the mood dimension, while trust and energy are
-modified heuristically. The aim of this agent is not to model
-psychologically accurate emotions but rather to provide a plausible
-feedback loop that affects responses and visualisations.
+The emotion agent updates the emotional state of the AI based on
+incoming messages and context. In this simplified stub we merely
+adjust the mood slightly when the assistant responds, to illustrate
+state mutation without implementing a full emotion model.
 """
 
 from __future__ import annotations
@@ -14,69 +12,65 @@ from __future__ import annotations
 from typing import Optional
 
 from neurosim.core.config import settings, Settings
-from neurosim.core.state import EmotionState
-from neurosim.core.utils import adjust_emotion, sentiment_score
+from neurosim.core.state import EmotionState, SessionState
 from neurosim.core.logging_config import get_agent_logger
 
 
 class EmotionAgent:
-    """Manage and update emotional state."""
+    """Update the emotional state based on conversation content."""
 
     def __init__(self, config: Optional[Settings] = None) -> None:
-        # Accept a Settings instance or default to module-level settings
         self.settings = config or settings
         self.logger = get_agent_logger("EmotionAgent", "EMOTION")
-        self.logger.info("EmotionAgent initialized")
+        self.logger.info("Initializing simplified EmotionAgent")
 
-    def update_on_message(self, text: str, emotion_state: EmotionState) -> EmotionState:
-        """Update the emotional state in response to a message.
+    def update_emotion(self, session_state: SessionState, message: str, reply: str) -> None:
+        """
+        Mutate the session state's emotion based on the latest message and reply.
 
-        This function analyses the sentiment of the input text and
-        adjusts the mood accordingly. It also applies mild decay to
-        trust and energy to simulate fatigue over time.
+        This implementation uses a very simple keyword‑based sentiment
+        analysis to adjust the ``mood``, ``trust`` and ``energy`` fields on
+        ``session_state.emotion``. It also appends a copy of the new
+        ``EmotionState`` to ``session_state.emotion_history`` so that
+        consumers can plot changes over time.
 
         Args:
-            text: The text to analyse.
-            emotion_state: The current emotion state to update.
-
-        Returns:
-            The updated emotion state.
+            session_state: The per‑session state that contains the current emotion.
+            message: The incoming user message.
+            reply: The assistant's reply.
         """
-        # Analyse sentiment and adjust mood
-        polarity = sentiment_score(text)
-        self.logger.debug(f"Sentiment analysis: polarity={polarity:.3f}")
-        
-        # Scale sentiment into a gentle adjustment
-        mood_change = polarity * 0.1
-        old_mood = emotion_state.mood
-        emotion_state.mood = adjust_emotion(emotion_state.mood, mood_change)
+        emotion: EmotionState = session_state.emotion
 
-        # Decay trust slightly with each interaction; more negative
-        # messages will erode trust faster. Conversely, positive
-        # sentiment will bolster trust a bit.
-        trust_change = polarity * 0.05 - 0.01
-        old_trust = emotion_state.trust
-        emotion_state.trust = adjust_emotion(emotion_state.trust, trust_change)
+        # Simple sentiment word lists; in a real implementation you might use
+        # a proper sentiment analysis model or lexicon. Words are lowercase.
+        positive_words = {"love", "great", "happy", "wonderful", "excited", "good", "amazing", "like"}
+        negative_words = {"hate", "bad", "sad", "angry", "tired", "upset", "frustrated", "dislike"}
 
-        # Energy decays very slightly; heavy negativity drains energy
-        energy_change = -0.005 + (-polarity * 0.02)
-        old_energy = emotion_state.energy
-        emotion_state.energy = adjust_emotion(emotion_state.energy, energy_change)
-        
-        self.logger.debug(f"Emotion state updated: mood {old_mood:.2f}→{emotion_state.mood:.2f}, "
-                         f"trust {old_trust:.2f}→{emotion_state.trust:.2f}, "
-                         f"energy {old_energy:.2f}→{emotion_state.energy:.2f}")
-        
-        return emotion_state
+        def score_text(text: str) -> int:
+            score = 0
+            for word in text.lower().split():
+                if word in positive_words:
+                    score += 1
+                elif word in negative_words:
+                    score -= 1
+            return score
 
-    def apply_event(self, event_text: str, emotion_state: EmotionState) -> EmotionState:
-        """Apply the emotional impact of an external event.
+        # Combine message and reply sentiment scores
+        sentiment_score = score_text(message) + score_text(reply)
 
-        External events (dreams, random triggers) can be used to mix
-        things up. For now we simply reuse the sentiment analysis and
-        treat events similarly to messages, but additional logic could
-        be added here to weight the changes differently or respond to
-        specific keywords.
-        """
-        self.logger.info(f"Applying emotional event: {event_text}")
-        return self.update_on_message(event_text, emotion_state)
+        # Adjust mood based on sentiment; each point shifts mood by 0.02
+        delta = 0.02 * sentiment_score
+        new_mood = max(0.0, min(1.0, emotion.mood + delta))
+        self.logger.debug(f"Updating mood from {emotion.mood} to {new_mood} based on sentiment score {sentiment_score}")
+        emotion.mood = new_mood
+
+        # Trust increases when assistant provides a reply (simulate positive reinforcement)
+        new_trust = max(0.0, min(1.0, emotion.trust + 0.005))
+        emotion.trust = new_trust
+
+        # Energy decreases slightly after each turn to simulate fatigue
+        new_energy = max(0.0, min(1.0, emotion.energy - 0.01))
+        emotion.energy = new_energy
+
+        # Append a copy of the new state to the history
+        session_state.emotion_history.append(EmotionState(emotion.mood, emotion.trust, emotion.energy))

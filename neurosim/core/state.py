@@ -16,7 +16,8 @@ from typing import Any, Dict, List, Optional
 
 @dataclass
 class EmotionState:
-    """Represents the current emotional state of the AI.
+    """
+    Represents the current emotional state of the AI.
 
     All emotional dimensions are normalised to the range [0, 1] with
     0 indicating the minimum possible level and 1 indicating the
@@ -34,11 +35,11 @@ class EmotionState:
 
 @dataclass
 class Character:
-    """A character definition describing high-level traits.
+    """
+    A character definition describing high-level traits.
 
-    Characters are loaded from JSON files located in the
-    ``data/characters`` directory. See the provided example file for
-    the expected schema.
+    Characters are loaded from JSON files located in the ``data/characters``
+    directory. See the provided example file for the expected schema.
     """
 
     name: str
@@ -52,7 +53,6 @@ class Character:
     @classmethod
     def from_json(cls, path: Path) -> "Character":
         import json
-
         data = json.loads(path.read_text())
         return cls(
             name=data.get("name", "Unnamed"),
@@ -67,7 +67,8 @@ class Character:
 
 @dataclass
 class SessionState:
-    """Holds per-session runtime state.
+    """
+    Holds per-session runtime state.
 
     A new ``SessionState`` should be created at the beginning of each
     Gradio session. It stores the conversation history, any memory
@@ -80,3 +81,8 @@ class SessionState:
     memory_context: List[str] = field(default_factory=list)
     emotion: EmotionState = field(default_factory=EmotionState)
     character: Optional[Character] = None
+
+    # Track historical emotion states after each update. The most recent state
+    # will be appended to this list by the emotion agent. This allows for
+    # visualising how emotions change over time.
+    emotion_history: List[EmotionState] = field(default_factory=list)

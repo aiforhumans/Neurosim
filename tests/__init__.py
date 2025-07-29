@@ -1,6 +1,6 @@
-"""
-Test package for NeuroSim.
+"""Test suite for NeuroSim.
 
-This package contains unit tests, integration tests, and performance tests
-for all components of the NeuroSim AI companion system.
+This package contains unit tests for the simplified NeuroSim
+implementation. To run the tests install ``pytest`` and run
+``pytest -q`` from the repository root.
 """

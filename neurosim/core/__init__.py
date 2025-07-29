@@ -1,9 +1,9 @@
 """
-Core modules for the NeuroSim project.
+Core package for NeuroSim.
 
-This package contains shared state objects, configuration, utility
-functions, and an agent manager used to coordinate the various AI
-agents in the system.
+This package exports the Settings object used across the
+application. Importing this module will initialise the global
+``settings`` instance with validated environment variables.
 """
 
-from .config import settings  # noqa: F401
+from .config import Settings, settings  # noqa: F401
