@@ -1,0 +1,14 @@
+gradio>=3.44.0
+langchain>=0.1.0
+langchain-community>=0.0.38
+langchain-openai>=0.0.8
+langchain-huggingface>=0.0.3
+chromadb>=0.4.24
+langchain-chroma>=0.2.5
+qdrant-client>=1.7.3
+sentence-transformers>=0.4.1
+pydantic>=1.10
+matplotlib>=3.7
+vaderSentiment>=3.3.2
+tiktoken>=0.3.1
+pip-tools>=7.0.0
